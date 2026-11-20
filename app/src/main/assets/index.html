@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Super Mario HD — 8 Worlds</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; touch-action: none; }
+  html, body {
+    width: 100%; height: 100%;
+    background: #090d16;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #fff;
+  }
+  #game-wrap {
+    position: relative;
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: #050811;
+  }
+  canvas {
+    display: block;
+    width: 100%; height: 100%;
+    object-fit: contain;
+  }
+  /* Top HUD */
+  #hud {
+    position: absolute; top: env(safe-area-inset-top, 10px); left: 16px; right: 16px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 10;
+    padding-top: 8px;
+  }
+  .hud-pill {
+    background: rgba(15, 23, 42, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 14px;
+    padding: 6px 14px;
+    display: flex; gap: 16px; align-items: center;
+    font-weight: 700; font-size: 14px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+  }
+  .hud-btns { pointer-events: auto; display: flex; gap: 8px; }
+  .icon-btn {
+    background: rgba(15, 23, 42, 0.78);
+    border: 1px solid rgba(255,255,255,0.2);
+    color: #fff; border-radius: 12px;
+    padding: 7px 12px; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+  }
+  .icon-btn:active { transform: scale(0.94); background: rgba(59,130,246,0.5); }
+
+  /* Mobile Touch Controls */
+  #touch-controls {
+    position: absolute; bottom: env(safe-area-inset-bottom, 16px); left: 18px; right: 18px;
+    display: flex; justify-content: space-between; align-items: flex-end;
+    pointer-events: none; z-index: 15;
+    padding-bottom: 10px;
+  }
+  .dpad-group, .action-group {
+    display: flex; gap: 14px; pointer-events: auto;
+  }
+  .t-btn {
+    width: 68px; height: 68px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    color: #fff;
+    font-size: 24px; font-weight: 800;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    transition: transform 0.06s, background 0.06s;
+  }
+  .t-btn span { font-size: 10px; opacity: 0.85; margin-top: 1px; letter-spacing: 0.5px; }
+  .t-btn.active, .t-btn:active {
+    transform: scale(0.92);
+    background: rgba(255, 255, 255, 0.36);
+    border-color: #fff;
+  }
+  .btn-jump { background: rgba(34, 197, 94, 0.28); border-color: rgba(74, 222, 128, 0.6); }
+  .btn-fire { background: rgba(239, 68, 68, 0.28); border-color: rgba(248, 113, 113, 0.6); }
+
+  /* Overlays */
+  .overlay {
+    position: absolute; inset: 0;
+    background: rgba(6, 10, 20, 0.82);
+    backdrop-filter: blur(12px);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 30; text-align: center; padding: 20px;
+  }
+  .hidden { display: none !important; }
+  .title {
+    font-size: clamp(28px, 5vw, 48px); font-weight: 900;
+    background: linear-gradient(135deg, #fde047, #f97316, #ef4444);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 8px; letter-spacing: 1px;
+  }
+  .subtitle { color: #cbd5e1; font-size: 14px; margin-bottom: 20px; max-width: 520px; }
+  .primary-btn {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none; color: #fff; font-size: 18px; font-weight: 800;
+    padding: 14px 36px; border-radius: 16px; cursor: pointer;
+    box-shadow: 0 8px 25px rgba(34,197,94,0.4);
+  }
+  .primary-btn:active { transform: scale(0.96); }
+  .worlds-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+    max-width: 540px; width: 100%; margin-bottom: 18px;
+  }
+  .world-card {
+    background: rgba(30, 41, 59, 0.9);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 12px; padding: 10px 6px;
+    color: #fff; font-weight: 700; font-size: 13px; cursor: pointer;
+  }
+  .world-card small { display: block; font-size: 10px; color: #94a3b8; margin-top: 3px; }
+  .world-card:active { background: #2563eb; }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <canvas id="game" width="960" height="540"></canvas>
+
+  <div id="hud">
+    <div class="hud-pill">
+      <div>❤️ <span id="hud-lives">3</span></div>
+      <div>🪙 <span id="hud-coins">0</span></div>
+      <div>⭐ <span id="hud-score">000000</span></div>
+      <div>🗺 <span id="hud-world">1-1</span></div>
+      <div>⏱ <span id="hud-time">400</span></div>
+    </div>
+    <div class="hud-btns">
+      <button class="icon-btn" id="btn-worlds">🗺 Миры</button>
+      <button class="icon-btn" id="btn-sound">🔊</button>
+    </div>
+  </div>
+
+  <div id="touch-controls">
+    <div class="dpad-group">
+      <div class="t-btn" id="btn-left">◀<span>ВЛЕВО</span></div>
+      <div class="t-btn" id="btn-right">▶<span>ВПРАВО</span></div>
+    </div>
+    <div class="action-group">
+      <div class="t-btn btn-fire" id="btn-b">🔥<span>ОГОНЬ/БЕГ</span></div>
+      <div class="t-btn btn-jump" id="btn-a">⬆<span>ПРЫЖОК</span></div>
+    </div>
+  </div>
+
+  <!-- Start Screen -->
+  <div class="overlay" id="start-screen">
+    <div class="title">SUPER MARIO HD</div>
+    <div class="subtitle">Все 8 миров • Современная HD-графика • Полная поддержка сенсорного экрана Android и клавиатуры (Стрелки, Ф/Пробел — прыжок, Я/Z — огонь)</div>
+    <button class="primary-btn" id="start-btn">▶ ИГРАТЬ (МИР 1-1)</button>
+  </div>
+
+  <!-- World Select Modal -->
+  <div class="overlay hidden" id="worlds-modal">
+    <div class="title" style="font-size:28px;">ВЫБОР МИРА (1–8)</div>
+    <div class="worlds-grid" id="worlds-grid"></div>
+    <button class="icon-btn" id="close-worlds">✕ Закрыть</button>
+  </div>
+
+  <!-- Message Screen -->
+  <div class="overlay hidden" id="msg-screen">
+    <div class="title" id="msg-title">ПОБЕДА!</div>
+    <div class="subtitle" id="msg-sub">Уровень пройден!</div>
+    <button class="primary-btn" id="msg-btn">ДАЛЕЕ</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = 960, H = 540, TILE = 40;
+
+// Audio Synth
+let audioCtx = null, soundOn = true;
+function playTone(freq, type, dur, vol=0.12, slide=0) {
+  if (!soundOn) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(slide, audioCtx.currentTime + dur);
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+  } catch(e){}
+}
+const sfx = {
+  jump: () => playTone(260, 'square', 0.18, 0.1, 620),
+  coin: () => { playTone(988, 'sine', 0.08, 0.12); setTimeout(()=>playTone(1319, 'sine', 0.22, 0.12), 70); },
+  stomp: () => playTone(180, 'sawtooth', 0.12, 0.14, 60),
+  powerup: () => [330,392,659,523,587,784].forEach((f,i)=>setTimeout(()=>playTone(f,'triangle',0.1,0.12),i*55)),
+  fire: () => playTone(720, 'sawtooth', 0.09, 0.1, 220),
+  break: () => playTone(140, 'square', 0.14, 0.15, 50),
+  win: () => [523,659,784,1046].forEach((f,i)=>setTimeout(()=>playTone(f,'triangle',0.18,0.14),i*110)),
+  die: () => [440,392,349,262].forEach((f,i)=>setTimeout(()=>playTone(f,'sawtooth',0.16,0.12),i*120))
+};
+
+// 8 Worlds Configuration
+const WORLDS = [
+  { id: '1-1', name: 'Зеленая Долина', sky1: '#2563eb', sky2: '#93c5fd', ground: '#16a34a', dirt: '#92400e', friction: 0.84, theme: 'grass' },
+  { id: '2-1', name: 'Закатная Пустыня', sky1: '#c2410c', sky2: '#fde047', ground: '#eab308', dirt: '#b45309', friction: 0.85, theme: 'desert' },
+  { id: '3-1', name: 'Ледяная Ночь', sky1: '#0f172a', sky2: '#1e3a8a', ground: '#bae6fd', dirt: '#0284c7', friction: 0.96, theme: 'ice' },
+  { id: '4-1', name: 'Облачное Небо', sky1: '#0284c7', sky2: '#e0f2fe', ground: '#f8fafc', dirt: '#94a3b8', friction: 0.84, theme: 'sky' },
+  { id: '5-1', name: 'Осенний Лес', sky1: '#7c2d12', sky2: '#fdba74', ground: '#ea580c', dirt: '#78350f', friction: 0.84, theme: 'autumn' },
+  { id: '6-1', name: 'Кристальный Грот', sky1: '#1e1b4b', sky2: '#4c1d95', ground: '#8b5cf6', dirt: '#312e81', friction: 0.85, theme: 'cave' },
+  { id: '7-1', name: 'Огненный Подступ', sky1: '#450a0a', sky2: '#b91c1c', ground: '#475569', dirt: '#1e293b', friction: 0.84, theme: 'lava' },
+  { id: '8-4', name: 'Замок Боузера', sky1: '#09090b', sky2: '#7f1d1d', ground: '#334155', dirt: '#0f172a', friction: 0.84, theme: 'castle', boss: true }
+];
+
+let currentWorldIdx = 0;
+let state = {
+  lives: 3, coins: 0, score: 0, time: 400,
+  paused: true, camX: 0, shake: 0,
+  tiles: [], enemies: [], items: [], fireballs: [], particles: [], clouds: [],
+  levelWidth: 4800, flagX: 4480, boss: null
+};
+
+const player = {
+  x: 80, y: 300, w: 30, h: 38,
+  vx: 0, vy: 0, dir: 1,
+  grounded: false, power: 1, // 0=small, 1=big, 2=fire
+  invuln: 0, star: 0, walkFrame: 0, squashX: 1, squashY: 1
+};
+
+// Input Handling (Keyboard + Touch)
+const keys = { left: false, right: false, jump: false, fire: false };
+let jumpPressed = false, firePressed = false;
+
+function triggerJump() {
+  if (state.paused) return;
+  if (player.grounded) {
+    player.vy = -14.2;
+    player.grounded = false;
+    player.squashX = 0.78; player.squashY = 1.25;
+    sfx.jump();
+  }
+}
+
+function triggerFire() {
+  if (state.paused) return;
+  if (player.power >= 2 && state.fireballs.length < 3) {
+    state.fireballs.push({
+      x: player.x + (player.dir > 0 ? player.w : -10),
+      y: player.y + player.h * 0.45,
+      vx: player.dir * 9.5, vy: 2, life: 120
+    });
+    sfx.fire();
+  }
+}
+
+window.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  const c = e.code;
+  if (c === 'ArrowLeft') keys.left = true;
+  if (c === 'ArrowRight') keys.right = true;
+  if (c === 'Space' || c === 'ArrowUp' || c === 'KeyW' || c === 'KeyA' || k === 'ф' || k === 'ц') {
+    if (!keys.jump) triggerJump();
+    keys.jump = true;
+  }
+  if (c === 'KeyZ' || c === 'KeyX' || c === 'ShiftLeft' || c === 'ShiftRight' || k === 'я' || k === 'ч') {
+    if (!keys.fire) triggerFire();
+    keys.fire = true;
+  }
+});
+
+window.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  const c = e.code;
+  if (c === 'ArrowLeft') keys.left = false;
+  if (c === 'ArrowRight') keys.right = false;
+  if (c === 'Space' || c === 'ArrowUp' || c === 'KeyW' || c === 'KeyA' || k === 'ф' || k === 'ц') keys.jump = false;
+  if (c === 'KeyZ' || c === 'KeyX' || c === 'ShiftLeft' || c === 'ShiftRight' || k === 'я' || k === 'ч') keys.fire = false;
+});
+
+function bindTouch(id, keyName, onPress) {
+  const el = document.getElementById(id);
+  const start = e => { e.preventDefault(); el.classList.add('active'); keys[keyName] = true; if (onPress) onPress(); };
+  const end = e => { e.preventDefault(); el.classList.remove('active'); keys[keyName] = false; };
+  el.addEventListener('touchstart', start, {passive: false});
+  el.addEventListener('touchend', end, {passive: false});
+  el.addEventListener('touchcancel', end, {passive: false});
+  el.addEventListener('mousedown', start);
+  el.addEventListener('mouseup', end);
+  el.addEventListener('mouseleave', end);
+}
+bindTouch('btn-left', 'left');
+bindTouch('btn-right', 'right');
+bindTouch('btn-a', 'jump', triggerJump);
+bindTouch('btn-b', 'fire', triggerFire);
+
+// Build Level
+function loadWorld(idx) {
+  currentWorldIdx = idx % WORLDS.length;
+  const wData = WORLDS[currentWorldIdx];
+  state.tiles = [];
+  state.enemies = [];
+  state.items = [];
+  state.fireballs = [];
+  state.particles = [];
+  state.camX = 0;
+  state.time = 400;
+  state.boss = null;
+
+  player.x = 80; player.y = 320; player.vx = 0; player.vy = 0;
+  player.h = player.power > 0 ? 52 : 36;
+
+  state.clouds = Array.from({length: 14}, (_, i) => ({
+    x: i * 380 + Math.random()*120, y: 45 + Math.random()*110, s: 0.7 + Math.random()*0.6
+  }));
+
+  const cols = 122;
+  state.levelWidth = cols * TILE;
+  state.flagX = (cols - 10) * TILE;
+
+  // Ground with pits
+  const pits = wData.boss ? [28,29, 55,56, 82,83] : [24,25, 52,53, 79,80];
+  for (let c = 0; c < cols; c++) {
+    if (pits.includes(c) && c > 8 && c < cols - 15) continue;
+    state.tiles.push({ x: c*TILE, y: H - TILE*2, w: TILE, h: TILE*2, type: 'ground' });
+  }
+
+  // Platforms, Bricks & ?-Blocks
+  for (let c = 10; c < cols - 16; c += 7) {
+    const rowY = H - TILE * (5 + (c % 3));
+    const len = 3 + (c % 3);
+    for (let k = 0; k < len; k++) {
+      const isQ = (k === Math.floor(len/2));
+      const reward = (c % 14 === 10) ? 'flower' : (c % 21 === 17 ? 'star' : 'coin');
+      state.tiles.push({
+        x: (c+k)*TILE, y: rowY, w: TILE, h: TILE,
+        type: isQ ? 'question' : 'brick',
+        used: false, reward, bumpY: 0
+      });
+    }
+    // Pipe
+    if (c % 14 === 3 && !pits.includes(c+4) && !pits.includes(c+5)) {
+      const ph = TILE * (2 + (c % 2));
+      state.tiles.push({ x: (c+4)*TILE, y: H - TILE*2 - ph, w: TILE*2, h: ph, type: 'pipe' });
+    }
+    // Enemies
+    if (!pits.includes(c+2)) {
+      state.enemies.push({
+        x: (c+2)*TILE, y: H - TILE*2 - 34, w: 34, h: 34,
+        vx: -1.6 - (currentWorldIdx * 0.15), vy: 0,
+        type: (c % 14 === 10) ? 'koopa' : 'goomba', alive: true
+      });
+    }
+  }
+
+  // Boss in World 8-4
+  if (wData.boss) {
+    state.boss = {
+      x: state.flagX - 240, y: H - TILE*2 - 76, w: 68, h: 76,
+      vx: -2, vy: 0, hp: 5, maxHp: 5, timer: 0, alive: true
+    };
+  }
+  updateHUD();
+}
+
+function updateHUD() {
+  document.getElementById('hud-lives').textContent = state.lives;
+  document.getElementById('hud-coins').textContent = state.coins;
+  document.getElementById('hud-score').textContent = String(state.score).padStart(6, '0');
+  document.getElementById('hud-world').textContent = WORLDS[currentWorldIdx].id;
+  document.getElementById('hud-time').textContent = Math.ceil(state.time);
+}
+
+function spawnParticles(x, y, color, count=10) {
+  for (let i = 0; i < count; i++) {
+    state.particles.push({
+      x, y, vx: (Math.random()-0.5)*7, vy: -Math.random()*7 - 2,
+      life: 28 + Math.random()*15, color, size: 4 + Math.random()*4
+    });
+  }
+}
+
+function rectIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function hurtPlayer() {
+  if (player.invuln > 0 || player.star > 0) return;
+  if (player.power > 0) {
+    player.power = 0;
+    player.h = 36;
+    player.invuln = 90;
+    state.shake = 10;
+    sfx.die();
+  } else {
+    state.lives--;
+    sfx.die();
+    if (state.lives <= 0) {
+      state.lives = 3; state.score = 0; state.coins = 0;
+      showMessage('GAME OVER', 'Попробуйте снова покорить все 8 миров!', () => loadWorld(0));
+    } else {
+      loadWorld(currentWorldIdx);
+    }
+  }
+  updateHUD();
+}
+
+function showMessage(title, sub, cb) {
+  state.paused = true;
+  document.getElementById('msg-title').textContent = title;
+  document.getElementById('msg-sub').textContent = sub;
+  const screen = document.getElementById('msg-screen');
+  screen.classList.remove('hidden');
+  document.getElementById('msg-btn').onclick = () => {
+    screen.classList.add('hidden');
+    state.paused = false;
+    cb();
+  };
+}
+
+// Physics & Game Loop
+let lastTime = 0;
+function update(dt) {
+  if (state.paused) return;
+  const wData = WORLDS[currentWorldIdx];
+
+  state.time -= dt;
+  if (state.time <= 0) { state.time = 400; hurtPlayer(); }
+  if (player.invuln > 0) player.invuln--;
+  if (player.star > 0) player.star--;
+  if (state.shake > 0) state.shake *= 0.85;
+
+  // Player horizontal movement
+  const maxSpd = keys.fire ? 7.4 : 5.2;
+  const accel = wData.theme === 'ice' ? 0.35 : 0.75;
+  if (keys.left) { player.vx -= accel; player.dir = -1; }
+  else if (keys.right) { player.vx += accel; player.dir = 1; }
+  else { player.vx *= wData.friction; }
+
+  if (player.vx > maxSpd) player.vx = maxSpd;
+  if (player.vx < -maxSpd) player.vx = -maxSpd;
+  if (Math.abs(player.vx) < 0.08) player.vx = 0;
+
+  player.x += player.vx;
+  if (player.x < 0) { player.x = 0; player.vx = 0; }
+
+  // Horizontal collisions
+  for (const t of state.tiles) {
+    if (rectIntersect(player, t)) {
+      if (player.vx > 0) player.x = t.x - player.w;
+      else if (player.vx < 0) player.x = t.x + t.w;
+      player.vx = 0;
+    }
+  }
+
+  // Gravity & Vertical movement
+  const grav = (keys.jump && player.vy < 0) ? 0.46 : 0.76;
+  player.vy += grav;
+  if (player.vy > 15) player.vy = 15;
+  player.y += player.vy;
+  const wasGrounded = player.grounded;
+  player.grounded = false;
+
+  for (let i = state.tiles.length - 1; i >= 0; i--) {
+    const t = state.tiles[i];
+    if (t.bumpY < 0) t.bumpY += 1.5;
+    if (rectIntersect(player, t)) {
+      if (player.vy > 0) {
+        player.y = t.y - player.h;
+        if (!wasGrounded) { player.squashX = 1.22; player.squashY = 0.8; }
+        player.vy = 0;
+        player.grounded = true;
+      } else if (player.vy < 0) {
+        player.y = t.y + t.h;
+        player.vy = 1.5;
+        if (t.type === 'question' && !t.used) {
+          t.used = true; t.bumpY = -10;
+          if (t.reward === 'coin') {
+            state.coins++; state.score += 200; sfx.coin();
+            spawnParticles(t.x + 20, t.y - 10, '#fde047', 12);
+          } else {
+            sfx.powerup();
+            state.items.push({ x: t.x + 4, y: t.y - 34, w: 32, h: 32, vx: 2, vy: 0, type: t.reward });
+          }
+        } else if (t.type === 'brick') {
+          if (player.power > 0) {
+            state.tiles.splice(i, 1);
+            state.score += 50; state.shake = 6; sfx.break();
+            spawnParticles(t.x + 20, t.y + 20, '#ea580c', 14);
+          } else {
+            t.bumpY = -8;
+          }
+        }
+      }
+    }
+  }
+
+  // Pit fall
+  if (player.y > H + 60) {
+    player.power = 0;
+    hurtPlayer();
+  }
+
+  player.squashX += (1 - player.squashX) * 0.2;
+  player.squashY += (1 - player.squashY) * 0.2;
+  if (Math.abs(player.vx) > 0.3 && player.grounded) player.walkFrame += Math.abs(player.vx) * 0.06;
+
+  // Items
+  for (let i = state.items.length - 1; i >= 0; i--) {
+    const it = state.items[i];
+    if (it.type !== 'flower') {
+      it.vy += 0.5;
+      it.x += it.vx;
+      for (const t of state.tiles) if (rectIntersect(it, t)) it.vx *= -1;
+      it.y += it.vy;
+      for (const t of state.tiles) if (rectIntersect(it, t) && it.vy > 0) { it.y = t.y - it.h; it.vy = it.type === 'star' ? -9 : 0; }
+    }
+    if (rectIntersect(player, it)) {
+      sfx.powerup();
+      state.score += 1000;
+      if (it.type === 'star') player.star = 480;
+      else { player.power = 2; player.h = 52; }
+      spawnParticles(it.x + 16, it.y + 16, '#fb923c', 16);
+      state.items.splice(i, 1);
+    }
+  }
+
+  // Fireballs
+  for (let i = state.fireballs.length - 1; i >= 0; i--) {
+    const f = state.fireballs[i];
+    f.x += f.vx; f.y += f.vy; f.vy += 0.55; f.life--;
+    for (const t of state.tiles) {
+      if (f.x > t.x && f.x < t.x + t.w && f.y + 8 > t.y && f.y < t.y + t.h) {
+        f.y = t.y - 8; f.vy = -7.5;
+      }
+    }
+    let hit = false;
+    for (const en of state.enemies) {
+      if (en.alive && f.x > en.x && f.x < en.x + en.w && f.y > en.y && f.y < en.y + en.h) {
+        en.alive = false; hit = true; state.score += 200; sfx.stomp();
+        spawnParticles(en.x + 17, en.y + 17, '#ef4444', 12);
+      }
+    }
+    if (state.boss && state.boss.alive && f.x > state.boss.x && f.x < state.boss.x + state.boss.w && f.y > state.boss.y && f.y < state.boss.y + state.boss.h) {
+      state.boss.hp--; hit = true; sfx.stomp();
+      spawnParticles(f.x, f.y, '#f97316', 14);
+      if (state.boss.hp <= 0) { state.boss.alive = false; state.score += 5000; }
+    }
+    if (hit || f.life <= 0 || f.y > H) state.fireballs.splice(i, 1);
+  }
+
+  // Enemies
+  for (const en of state.enemies) {
+    if (!en.alive) continue;
+    if (Math.abs(en.x - player.x) > W) continue;
+    en.vy += 0.6;
+    en.x += en.vx;
+    for (const t of state.tiles) if (rectIntersect(en, t)) { en.x -= en.vx; en.vx *= -1; }
+    en.y += en.vy;
+    for (const t of state.tiles) if (rectIntersect(en, t) && en.vy > 0) { en.y = t.y - en.h; en.vy = 0; }
+    if (en.y > H + 50) en.alive = false;
+
+    if (rectIntersect(player, en)) {
+      if (player.star > 0) {
+        en.alive = false; state.score += 200; sfx.stomp();
+        spawnParticles(en.x + 17, en.y + 17, '#fde047', 12);
+      } else if (player.vy > 0 && player.y + player.h - player.vy <= en.y + 14) {
+        en.alive = false; player.vy = -10.5; state.score += 100; sfx.stomp();
+        spawnParticles(en.x + 17, en.y + 17, '#a855f7', 10);
+      } else {
+        hurtPlayer();
+      }
+    }
+  }
+
+  // Boss AI
+  if (state.boss && state.boss.alive) {
+    const b = state.boss;
+    b.timer++;
+    b.x += b.vx;
+    if (b.x < state.flagX - 420 || b.x > state.flagX - 100) b.vx *= -1;
+    if (b.timer % 120 === 0) b.vy = -11;
+    b.vy += 0.5; b.y += b.vy;
+    if (b.y > H - TILE*2 - b.h) { b.y = H - TILE*2 - b.h; b.vy = 0; }
+    if (rectIntersect(player, b)) {
+      if (player.star > 0) { b.alive = false; state.score += 5000; }
+      else hurtPlayer();
+    }
+  }
+
+  // Particles
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.35; p.life--;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+
+  // Camera follow
+  const targetCam = Math.max(0, Math.min(state.levelWidth - W, player.x - W * 0.35));
+  state.camX += (targetCam - state.camX) * 0.14;
+
+  // Finish Flag
+  if (player.x >= state.flagX) {
+    sfx.win();
+    state.score += Math.ceil(state.time) * 10;
+    const nextIdx = currentWorldIdx + 1;
+    if (nextIdx < WORLDS.length) {
+      showMessage(`МИР ${wData.id} ПРОЙДЕН!`, `Следующий мир: ${WORLDS[nextIdx].id} — ${WORLDS[nextIdx].name}`, () => loadWorld(nextIdx));
+    } else {
+      showMessage('ПОЗДРАВЛЯЕМ! ИГРА ПРОЙДЕНА!', `Боузер повержен! Итоговый счет: ${state.score}`, () => loadWorld(0));
+    }
+  }
+  updateHUD();
+}
+
+// Render HD Graphics
+function draw() {
+  const wData = WORLDS[currentWorldIdx];
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, wData.sky1);
+  grad.addColorStop(1, wData.sky2);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Parallax Mountains & Clouds
+  ctx.save();
+  for (const c of state.clouds) {
+    const cx = ((c.x - state.camX * 0.3) % (W + 300) + (W + 300)) % (W + 300) - 150;
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.arc(cx, c.y, 28*c.s, 0, Math.PI*2);
+    ctx.arc(cx+26*c.s, c.y-8*c.s, 34*c.s, 0, Math.PI*2);
+    ctx.arc(cx+56*c.s, c.y, 26*c.s, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  const sx = (Math.random()-0.5) * state.shake;
+  const sy = (Math.random()-0.5) * state.shake;
+  ctx.translate(-state.camX + sx, sy);
+
+  // Lava in World 7 & 8
+  if (wData.theme === 'lava' || wData.theme === 'castle') {
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(state.camX, H - 26, W, 26);
+  }
+
+  // Tiles
+  for (const t of state.tiles) {
+    if (t.x + t.w < state.camX - 50 || t.x > state.camX + W + 50) continue;
+    const ty = t.y + (t.bumpY || 0);
+    if (t.type === 'ground') {
+      ctx.fillStyle = wData.dirt;
+      ctx.fillRect(t.x, ty + 10, t.w, t.h - 10);
+      ctx.fillStyle = wData.ground;
+      ctx.fillRect(t.x, ty, t.w, 12);
+    } else if (t.type === 'brick') {
+      ctx.fillStyle = '#b45309';
+      ctx.fillRect(t.x, ty, t.w, t.h);
+      ctx.strokeStyle = '#78350f'; ctx.lineWidth = 2;
+      ctx.strokeRect(t.x+1, ty+1, t.w-2, t.h-2);
+    } else if (t.type === 'question') {
+      ctx.fillStyle = t.used ? '#64748b' : '#f59e0b';
+      ctx.fillRect(t.x, ty, t.w, t.h);
+      ctx.strokeStyle = '#fef08a'; ctx.lineWidth = 2;
+      ctx.strokeRect(t.x+2, ty+2, t.w-4, t.h-4);
+      if (!t.used) {
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('?', t.x + t.w/2, ty + 29);
+      }
+    } else if (t.type === 'pipe') {
+      const pGrad = ctx.createLinearGradient(t.x, 0, t.x + t.w, 0);
+      pGrad.addColorStop(0, '#15803d'); pGrad.addColorStop(0.35, '#4ade80'); pGrad.addColorStop(1, '#14532d');
+      ctx.fillStyle = pGrad;
+      ctx.fillRect(t.x + 4, ty + 18, t.w - 8, t.h - 18);
+      ctx.fillRect(t.x, ty, t.w, 20);
+      ctx.strokeStyle = '#052e16'; ctx.lineWidth = 2;
+      ctx.strokeRect(t.x, ty, t.w, 20);
+    }
+  }
+
+  // Flagpole & Castle
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fillRect(state.flagX, H - TILE*2 - 220, 8, 220);
+  ctx.fillStyle = '#22c55e';
+  ctx.beginPath();
+  ctx.moveTo(state.flagX + 8, H - TILE*2 - 215);
+  ctx.lineTo(state.flagX + 64, H - TILE*2 - 190);
+  ctx.lineTo(state.flagX + 8, H - TILE*2 - 165);
+  ctx.fill();
+
+  // Castle
+  const cx = state.flagX + 140;
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillRect(cx, H - TILE*2 - 130, 120, 130);
+  ctx.fillStyle = '#1e293b';
+  ctx.beginPath(); ctx.arc(cx + 60, H - TILE*2 - 35, 24, Math.PI, 0); ctx.fill();
+  ctx.fillRect(cx + 36, H - TILE*2 - 35, 48, 35);
+
+  // Items
+  for (const it of state.items) {
+    ctx.fillStyle = it.type === 'star' ? '#fde047' : '#f97316';
+    ctx.beginPath(); ctx.arc(it.x + 16, it.y + 16, 15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(it.x + 16, it.y + 16, 7, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Enemies
+  for (const en of state.enemies) {
+    if (!en.alive) continue;
+    ctx.fillStyle = en.type === 'koopa' ? '#16a34a' : '#78350f';
+    ctx.beginPath();
+    ctx.roundRect(en.x, en.y, en.w, en.h, 10);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(en.x + 7, en.y + 9, 6, 8);
+    ctx.fillRect(en.x + 20, en.y + 9, 6, 8);
+  }
+
+  // Boss
+  if (state.boss && state.boss.alive) {
+    const b = state.boss;
+    ctx.fillStyle = '#15803d';
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 14); ctx.fill();
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(b.x, b.y - 16, b.w * (b.hp / b.maxHp), 8);
+  }
+
+  // Fireballs
+  for (const f of state.fireballs) {
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath(); ctx.arc(f.x, f.y, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.beginPath(); ctx.arc(f.x, f.y, 4, 0, Math.PI*2); ctx.fill();
+  }
+
+  // Player (Detailed Mario)
+  if (!(player.invuln > 0 && Math.floor(player.invuln / 4) % 2 === 0)) {
+    ctx.save();
+    ctx.translate(player.x + player.w/2, player.y + player.h);
+    ctx.scale(player.dir * player.squashX, player.squashY);
+
+    // Aura for fire/star
+    if (player.star > 0 || player.power >= 2) {
+      ctx.shadowColor = player.star > 0 ? '#fde047' : '#f97316';
+      ctx.shadowBlur = 16;
+    }
+
+    const h = player.h;
+    // Overalls
+    ctx.fillStyle = player.power >= 2 ? '#ef4444' : '#2563eb';
+    ctx.beginPath(); ctx.roundRect(-13, -h*0.52, 26, h*0.42, 6); ctx.fill();
+    // Shirt
+    ctx.fillStyle = player.power >= 2 ? '#f8fafc' : '#dc2626';
+    ctx.fillRect(-12, -h*0.62, 24, h*0.18);
+    // Head
+    ctx.fillStyle = '#fed7aa';
+    ctx.beginPath(); ctx.arc(0, -h*0.76, 12, 0, Math.PI*2); ctx.fill();
+    // Cap
+    ctx.fillStyle = player.power >= 2 ? '#f8fafc' : '#dc2626';
+    ctx.beginPath(); ctx.arc(0, -h*0.82, 12, Math.PI, 0); ctx.fill();
+    ctx.fillRect(0, -h*0.84, 16, 5);
+    // Eye & Mustache
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(5, -h*0.78, 3, 5);
+    ctx.fillRect(3, -h*0.69, 9, 3);
+    // Boots
+    const step = Math.sin(player.walkFrame) * 4;
+    ctx.fillStyle = '#78350f';
+    ctx.fillRect(-12 + step, -7, 10, 7);
+    ctx.fillRect(2 - step, -7, 10, 7);
+
+    ctx.restore();
+  }
+
+  // Particles
+  for (const p of state.particles) {
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  }
+
+  ctx.restore();
+}
+
+function loop(ts) {
+  const dt = Math.min(0.05, (ts - lastTime) / 1000 || 0.016);
+  lastTime = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// UI Events
+document.getElementById('start-btn').onclick = () => {
+  document.getElementById('start-screen').classList.add('hidden');
+  state.paused = false;
+  loadWorld(0);
+};
+document.getElementById('btn-sound').onclick = e => {
+  soundOn = !soundOn;
+  e.target.textContent = soundOn ? '🔊' : '🔇';
+};
+const worldsGrid = document.getElementById('worlds-grid');
+WORLDS.forEach((w, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'world-card';
+  btn.innerHTML = `Мир ${w.id}<small>${w.name}</small>`;
+  btn.onclick = () => {
+    document.getElementById('worlds-modal').classList.add('hidden');
+    document.getElementById('start-screen').classList.add('hidden');
+    state.paused = false;
+    loadWorld(i);
+  };
+  worldsGrid.appendChild(btn);
+});
+document.getElementById('btn-worlds').onclick = () => { state.paused = true; document.getElementById('worlds-modal').classList.remove('hidden'); };
+document.getElementById('close-worlds').onclick = () => { document.getElementById('worlds-modal').classList.add('hidden'); state.paused = false; };
+
+loadWorld(0);
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
